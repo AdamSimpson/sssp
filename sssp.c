@@ -12,7 +12,9 @@ struct GRAPH {
   int64_t node_count;
 
   // Using forward star representation
-  int64_t *arcs; // arcs[i] is index in arc_begin and weights for i'th node
+  // arcs[i] is first index in arc_begin and weights for i'th node
+  // arcs[i+1] is the last index + 1 in arc_begin and weights for i'th node
+  int64_t *arcs;
   int64_t *arc_begin;
   float  *weights;
 };

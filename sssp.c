@@ -17,29 +17,44 @@ struct GRAPH {
   float  *weights;
 };
 
-void Initialize(bool *unsettled, bool *frontier, float *distance,
-                int64_t start_node, struct GRAPH graph) {
+struct SSSP {
+  bool *unsettled;
+  bool *frontier;
+  float *distance;
+  float *delta_node;
+  int64_t start_node;
+  float delta_dist;
+};
+
+void Initialize(struct SSSP *sssp, struct GRAPH graph) {
+  sssp->unsettled = malloc(graph.node_count * sizeof(int64_t));
+  sssp->frontier = malloc(graph.node_count * sizeof(int64_t));
+  sssp->distance = malloc(graph.node_count * sizeof(float));
+  sssp->delta_node = malloc(graph.node_count * sizeof(float));
+  sssp->delta_dist = FLT_MAX;
+  sssp->start_node = 0; // Change this to whatever
+
   for(int i=0; i<graph.node_count; i++) {
-    distance[i] = FLT_MAX;
-    frontier[i] = false;
-    unsettled[i] = false;
+    sssp->distance[i] = FLT_MAX;
+    sssp->frontier[i] = false;
+    sssp->unsettled[i] = false;
   }
 
-  distance[start_node] = 0.0;
-  frontier[start_node] = true;
-  unsettled[start_node] = false;
+  sssp->distance[sssp->start_node] = 0.0;
+  sssp->frontier[sssp->start_node] = true;
+  sssp->unsettled[sssp->start_node] = false;
 }
 
-void Relaxation(bool *unsettled, bool *frontier, float *distance, struct GRAPH graph) {
+void Relaxation(struct SSSP sssp, struct GRAPH graph) {
   for(int i=0; i<graph.node_count; i++) {
-    if(frontier[i] == true) {
+    if(sssp.frontier[i] == true) {
       int64_t arc = graph.arcs[i];
       int64_t arc_next = graph.arcs[i+1];
       int64_t begin = graph.arc_begin[arc];
       int64_t end = graph.arc_begin[arc_next];
       for(int64_t j=begin; j<end; j++) {
-        if(unsettled[j] == true) {
-          distance[j] = MIN(distance[j], distance[i] + graph.weights[j]);
+        if(sssp.unsettled[j] == true) {
+          sssp.distance[j] = MIN(sssp.distance[j], sssp.distance[i] + graph.weights[j]);
         }
       }
     }
@@ -47,31 +62,29 @@ void Relaxation(bool *unsettled, bool *frontier, float *distance, struct GRAPH g
 
 }
 
-void SettlementMin(bool *unsettled, float *distance,
-                   float *delta_node, float *delta_dist, struct GRAPH graph) {
-  *delta_dist = FLT_MAX;
+void SettlementMin(struct SSSP* sssp, struct GRAPH graph) {
+  sssp->delta_dist = FLT_MAX;
   for(int i=0; i<graph.node_count; i++) {
-    if(unsettled[i] == true) {
-      float dist_i = distance[i] + delta_node[i];
-      if(dist_i < *delta_dist)
-        *delta_dist = dist_i;
+    if(sssp->unsettled[i] == true) {
+      float dist_i = sssp->distance[i] + sssp->delta_node[i];
+      if(dist_i < sssp->delta_dist)
+        sssp->delta_dist = dist_i;
     }
   }
 }
 
-void SettlementUpdate(bool *unsettled, bool *frontier,
-                      float *distance, float delta_dist, struct GRAPH graph) {
+void SettlementUpdate(struct SSSP sssp, struct GRAPH graph) {
   for(int i=0; i<graph.node_count; i++) {
-    frontier[i] = false;
-    if(unsettled[i] == true && distance[i] <= delta_dist) {
-     unsettled[i] = false;
-     frontier[i] = true;
+    sssp.frontier[i] = false;
+    if(sssp.unsettled[i] == true && sssp.distance[i] <= sssp.delta_dist) {
+     sssp.unsettled[i] = false;
+     sssp.frontier[i] = true;
     }
   }
 }
 
 // compute the minimum arch weight for each node
-void PrecomputeNodeMinimum(float *delta_node, struct GRAPH graph) {
+void PrecomputeNodeMinimum(struct SSSP sssp, struct GRAPH graph) {
   for(int i=0; i<graph.node_count; i++) {
     int64_t arc = graph.arcs[i];
     int64_t arc_next = graph.arcs[i+1];
@@ -84,7 +97,7 @@ void PrecomputeNodeMinimum(float *delta_node, struct GRAPH graph) {
       if(weight < minimum_weight)
         minimum_weight = weight;
     }
-    delta_node[i] = minimum_weight;
+    sssp.delta_node[i] = minimum_weight;
   }
 }
 
@@ -122,22 +135,16 @@ void ReadInput(struct GRAPH *graph) {
 
 int main(int argc, char **argv) {
   struct GRAPH graph;
+  struct SSSP sssp;
 
   ReadInput(&graph);
-  bool *unsettled = malloc(graph.node_count * sizeof(int64_t));
-  bool *frontier = malloc(graph.node_count * sizeof(int64_t));
-  float *distance = malloc(graph.node_count * sizeof(float));
-  float *delta_node = malloc(graph.node_count * sizeof(float));
-  float delta_dist = FLT_MAX;
+  PrecomputeNodeMinimum(sssp, graph);
+  Initialize(&sssp, graph);
 
-  PrecomputeNodeMinimum(delta_node,graph);
-
-  int64_t start_node = 0;
-  Initialize(unsettled, frontier, distance, start_node, graph);
-  while(delta_dist < FLT_MAX) {
-    Relaxation(unsettled, frontier, distance, graph);
-    SettlementMin(unsettled, distance, delta_node, &delta_dist, graph);
-    SettlementUpdate(unsettled, frontier, distance, delta_dist, graph);
+  while(sssp.delta_dist < FLT_MAX) {
+    Relaxation(sssp, graph);
+    SettlementMin(&sssp, graph);
+    SettlementUpdate(sssp, graph);
   }
 
   return 0;

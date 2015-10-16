@@ -5,6 +5,8 @@
 #include <stdbool.h>
 #include <float.h>
 
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))
+
 struct GRAPH {
   int64_t arc_count;
   int64_t node_count;
@@ -15,8 +17,9 @@ struct GRAPH {
   float  *weights;
 };
 
-void Initialize(bool *unsettled, bool *frontier_count, float *distance) {
-  for(int i=0; i<node_count; i++) {
+void Initialize(bool *unsettled, bool *frontier, float *distance,
+                int64_t start_node, struct GRAPH graph) {
+  for(int i=0; i<graph.node_count; i++) {
     distance[i] = FLT_MAX;
     frontier[i] = false;
     unsettled[i] = false;
@@ -30,13 +33,13 @@ void Initialize(bool *unsettled, bool *frontier_count, float *distance) {
 void Relaxation(bool *unsettled, bool *frontier, float *distance, struct GRAPH graph) {
   for(int i=0; i<graph.node_count; i++) {
     if(frontier[i] == true) {
-      int64_t arc = graph.arc[i];
-      int64_t arc_next = graph.arc[i+1];
+      int64_t arc = graph.arcs[i];
+      int64_t arc_next = graph.arcs[i+1];
       int64_t begin = graph.arc_begin[arc];
       int64_t end = graph.arc_begin[arc_next];
-      for(int64_t j=start; j<end; j++) {
+      for(int64_t j=begin; j<end; j++) {
         if(unsettled[j] == true) {
-          distance[j] = min(distance[j], distance[i] + weights[j]);
+          distance[j] = MIN(distance[j], distance[i] + graph.weights[j]);
         }
       }
     }
@@ -45,11 +48,11 @@ void Relaxation(bool *unsettled, bool *frontier, float *distance, struct GRAPH g
 }
 
 void SettlementMin(bool *unsettled, float *distance,
-                   double *delta_node, float *delta_dist, struct GRAPH graph) {
+                   float *delta_node, float *delta_dist, struct GRAPH graph) {
   *delta_dist = FLT_MAX;
   for(int i=0; i<graph.node_count; i++) {
     if(unsettled[i] == true) {
-      double dist_i = distance[i] + delta_node[i];
+      float dist_i = distance[i] + delta_node[i];
       if(dist_i < *delta_dist)
         *delta_dist = dist_i;
     }
@@ -57,7 +60,7 @@ void SettlementMin(bool *unsettled, float *distance,
 }
 
 void SettlementUpdate(bool *unsettled, bool *frontier,
-                      double *distance, float delta_dist, struct GRAPH graph) {
+                      float *distance, float delta_dist, struct GRAPH graph) {
   for(int i=0; i<graph.node_count; i++) {
     frontier[i] = false;
     if(unsettled[i] == true && distance[i] <= delta_dist) {
@@ -70,14 +73,14 @@ void SettlementUpdate(bool *unsettled, bool *frontier,
 // compute the minimum arch weight for each node
 void PrecomputeNodeMinimum(float *delta_node, struct GRAPH graph) {
   for(int i=0; i<graph.node_count; i++) {
-    int64_t arc = graph.arc[i];
-    int64_t arc_next = graph.arc[i+1];
+    int64_t arc = graph.arcs[i];
+    int64_t arc_next = graph.arcs[i+1];
     int64_t begin = graph.arc_begin[arc];
     int64_t end = graph.arc_begin[arc_next];
 
     float minimum_weight = FLT_MAX;
-    for(int64_t j=start; j<end; j++) {
-      float weight = weights[j];
+    for(int64_t j=begin; j<end; j++) {
+      float weight = graph.weights[j];
       if(weight < minimum_weight)
         minimum_weight = weight;
     }
@@ -95,21 +98,21 @@ void ReadInput(struct GRAPH *graph) {
   int record_size;
   fread(&record_size, sizeof(int), 1, ifp);
   if (record_size != sizeof(int64_t)) {
-    printf("record size = %d != %d", record_size, sizeof(int64_t));
+    printf("record size = %d != %lu", record_size, sizeof(int64_t));
   }
   graph->arcs = (int64_t *) malloc (sizeof(int64_t) * (graph->node_count + 1));
   fread(graph->arcs, record_size, graph->node_count + 1, ifp);
   fread(&graph->arc_count, sizeof(int64_t), 1, ifp);
   fread(&record_size, sizeof(int), 1, ifp);
   if (record_size != sizeof(int64_t)) {
-    printf("record size = %d != %d", record_size, sizeof(int64_t));
+    printf("record size = %d != %lu", record_size, sizeof(int64_t));
   }
-  arc_begin = (int64_t *) malloc(sizeof(int64_t) * graph->arc_count);
-  fread(arc_begin, record_size, graph->arc_count, ifp);
+  graph->arc_begin = (int64_t *) malloc(sizeof(int64_t) * graph->arc_count);
+  fread(graph->arc_begin, record_size, graph->arc_count, ifp);
 
   fread(&record_size, sizeof(int), 1, ifp);
   if (record_size != sizeof(float)) {
-    printf("record size = %d != %d", record_size, sizeof(float));
+    printf("record size = %d != %lu", record_size, sizeof(float));
   }
   graph->weights = (float *) malloc (sizeof(float) * graph->arc_count);
   fread(graph->weights, sizeof(float), graph->arc_count, ifp);
@@ -117,23 +120,24 @@ void ReadInput(struct GRAPH *graph) {
   fclose(ifp);
 }
 
-void main(int argc, char **argv) {
+int main(int argc, char **argv) {
   struct GRAPH graph;
 
-  ReadInput(graph);
-  int64_t *unsettled = malloc(graph->node_count * sizeof(int64_t));
-  int64_t *frontier = malloc(graph->node_count * sizeof(int64_t));
-  float *distance = malloc(graph->node_count * sizeof(float));
-  float *delta_node = malloc(graph->node_count * sizeof(float));
-  float delta_dist = FLT_MAX
+  ReadInput(&graph);
+  bool *unsettled = malloc(graph.node_count * sizeof(int64_t));
+  bool *frontier = malloc(graph.node_count * sizeof(int64_t));
+  float *distance = malloc(graph.node_count * sizeof(float));
+  float *delta_node = malloc(graph.node_count * sizeof(float));
+  float delta_dist = FLT_MAX;
 
-  PrecomputeNodeMinimum(graph, delta_node);
+  PrecomputeNodeMinimum(delta_node,graph);
 
-  Initialize(unsettled, frontier, distance);
+  int64_t start_node = 0;
+  Initialize(unsettled, frontier, distance, start_node, graph);
   while(delta_dist < FLT_MAX) {
-    Relax(unsettled, frontier, distance, graph);
-    SettlementMin(unsettled, distance, graph);
-    SettlementUpdate(unsettled, frontier, distance, *delta_dist);
+    Relaxation(unsettled, frontier, distance, graph);
+    SettlementMin(unsettled, distance, delta_node, &delta_dist, graph);
+    SettlementUpdate(unsettled, frontier, distance, delta_dist, graph);
   }
 
   return 0;

@@ -56,7 +56,7 @@ void Relaxation(struct SSSP sssp, struct GRAPH graph) {
       for(int64_t j=begin; j<end; j++) {
         int64_t tail_node = graph.arc_tail[j];
         if(sssp.unsettled[tail_node] == true) {
-          sssp.distance[tail_node] = MIN(sssp.distance[tail_node], sssp.distance[i] + graph.weights[tail_node]);
+          sssp.distance[tail_node] = MIN(sssp.distance[tail_node], sssp.distance[i] + graph.weights[j]);
         }
       }
     }
@@ -93,9 +93,7 @@ void PrecomputeNodeMinimum(struct SSSP sssp, struct GRAPH graph) {
 
     float minimum_weight = FLT_MAX;
     for(int64_t j=begin; j<end; j++) {
-      int64_t tail_node = graph.arc_tail[j];
-
-      float weight = graph.weights[tail_node];
+      float weight = graph.weights[j];
       if(weight < minimum_weight)
         minimum_weight = weight;
     }

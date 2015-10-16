@@ -79,8 +79,8 @@ void SettlementUpdate(struct SSSP sssp, struct GRAPH graph) {
   for(int i=0; i<graph.node_count; i++) {
     sssp.frontier[i] = false;
     if(sssp.unsettled[i] == true && sssp.distance[i] <= sssp.delta_dist) {
-     sssp.unsettled[i] = false;
-     sssp.frontier[i] = true;
+      sssp.unsettled[i] = false;
+      sssp.frontier[i] = true;
     }
   }
 }

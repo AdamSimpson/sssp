@@ -12,10 +12,10 @@ struct GRAPH {
   int64_t node_count;
 
   // Using forward star representation
-  // arcs[i] is first index in arc_begin and weights for i'th node
-  // arcs[i+1] is the last index + 1 in arc_begin and weights for i'th node
+  // arcs[i] is first index in arc_tail and weights for i'th node
+  // arcs[i+1] is the last index + 1 in arc_tail and weights for i'th node
   int64_t *arcs;
-  int64_t *arc_begin;
+  int64_t *arc_tail;
   float  *weights;
 };
 
@@ -50,13 +50,13 @@ void Initialize(struct SSSP *sssp, struct GRAPH graph) {
 void Relaxation(struct SSSP sssp, struct GRAPH graph) {
   for(int i=0; i<graph.node_count; i++) {
     if(sssp.frontier[i] == true) {
-      int64_t arc = graph.arcs[i];
-      int64_t arc_next = graph.arcs[i+1];
-      int64_t begin = graph.arc_begin[arc];
-      int64_t end = graph.arc_begin[arc_next];
+      int64_t begin = graph.arcs[i];
+      int64_t end = graph.arcs[i+1];
+
       for(int64_t j=begin; j<end; j++) {
-        if(sssp.unsettled[j] == true) {
-          sssp.distance[j] = MIN(sssp.distance[j], sssp.distance[i] + graph.weights[j]);
+        int64_t tail_node = graph.arc_tail[j];
+        if(sssp.unsettled[tail_node] == true) {
+          sssp.distance[tail_node] = MIN(sssp.distance[tail_node], sssp.distance[i] + graph.weights[tail_node]);
         }
       }
     }
@@ -88,14 +88,14 @@ void SettlementUpdate(struct SSSP sssp, struct GRAPH graph) {
 // compute the minimum arch weight for each node
 void PrecomputeNodeMinimum(struct SSSP sssp, struct GRAPH graph) {
   for(int i=0; i<graph.node_count; i++) {
-    int64_t arc = graph.arcs[i];
-    int64_t arc_next = graph.arcs[i+1];
-    int64_t begin = graph.arc_begin[arc];
-    int64_t end = graph.arc_begin[arc_next];
+    int64_t begin = graph.arcs[i];
+    int64_t end = graph.arcs[i+1];
 
     float minimum_weight = FLT_MAX;
     for(int64_t j=begin; j<end; j++) {
-      float weight = graph.weights[j];
+      int64_t tail_node = graph.arc_tail[j];
+
+      float weight = graph.weights[tail_node];
       if(weight < minimum_weight)
         minimum_weight = weight;
     }
@@ -122,8 +122,8 @@ void ReadInput(struct GRAPH *graph) {
   if (record_size != sizeof(int64_t)) {
     printf("record size = %d != %lu", record_size, sizeof(int64_t));
   }
-  graph->arc_begin = (int64_t *) malloc(sizeof(int64_t) * graph->arc_count);
-  fread(graph->arc_begin, record_size, graph->arc_count, ifp);
+  graph->arc_tail = (int64_t *) malloc(sizeof(int64_t) * graph->arc_count);
+  fread(graph->arc_tail, record_size, graph->arc_count, ifp);
 
   fread(&record_size, sizeof(int), 1, ifp);
   if (record_size != sizeof(float)) {

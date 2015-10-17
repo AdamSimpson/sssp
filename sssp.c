@@ -138,8 +138,8 @@ int main(int argc, char **argv) {
   struct SSSP sssp;
 
   ReadInput(&graph);
-  PrecomputeNodeMinimum(sssp, graph);
   Initialize(&sssp, graph);
+  PrecomputeNodeMinimum(sssp, graph);
 
   while(sssp.delta_dist < FLT_MAX) {
     Relaxation(sssp, graph);

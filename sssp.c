@@ -104,7 +104,7 @@ void PrecomputeNodeMinimum(struct SSSP sssp, struct GRAPH graph) {
 void ReadInput(struct GRAPH *graph) {
   printf("read forward star data...\n");
   FILE *ifp;
-  if ((ifp = fopen("put/file/name/here", "r")) == NULL) {
+  if ((ifp = fopen("/home/atj/Documents/GISData/GDT/GDT_10MFS.bin", "r")) == NULL) {
     printf("open file failed\n");
   }
   fread(&graph->node_count, sizeof(int64_t), 1, ifp);

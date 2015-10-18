@@ -12,18 +12,19 @@ struct GRAPH {
   int64_t node_count;
 
   // Using forward star representation
-  // arcs[i] is first index in arc_tail and weights for i'th node
-  // arcs[i+1] is the last index + 1 in arc_tail and weights for i'th node
-  int64_t *arcs;
-  int64_t *arc_tail;
-  float  *weights;
+  // arc_index[i] is first index in arc_tail and weights for i'th node
+  // arc_index[i+1] is the last index + 1 in arc_tail and weights for i'th node
+  int64_t *restrict arc_index;
+  int64_t *restrict arc_tail;
+  float  *restrict weights;
 };
 
 struct SSSP {
-  bool *unsettled;
-  bool *frontier;
-  float *distance;
-  float *delta_node;
+  bool *restrict unsettled;
+  bool *restrict frontier;
+  float *restrict distance;
+  float *restrict delta_node;
+
   int64_t start_node;
   float delta_dist;
 };
@@ -33,25 +34,26 @@ void Initialize(struct SSSP *sssp, struct GRAPH graph) {
   sssp->frontier = malloc(graph.node_count * sizeof(int64_t));
   sssp->distance = malloc(graph.node_count * sizeof(float));
   sssp->delta_node = malloc(graph.node_count * sizeof(float));
-  sssp->delta_dist = FLT_MAX;
-  sssp->start_node = 0; // Change this to whatever
 
-  for(int i=0; i<graph.node_count; i++) {
+  sssp->delta_dist = 0.0f;
+  sssp->start_node = 0;
+
+  for(int64_t i=0; i<graph.node_count; i++) {
     sssp->distance[i] = FLT_MAX;
     sssp->frontier[i] = false;
-    sssp->unsettled[i] = false;
+    sssp->unsettled[i] = true;
   }
 
-  sssp->distance[sssp->start_node] = 0.0;
+  sssp->distance[sssp->start_node] = 0.0f;
   sssp->frontier[sssp->start_node] = true;
   sssp->unsettled[sssp->start_node] = false;
 }
 
 void Relaxation(struct SSSP sssp, struct GRAPH graph) {
-  for(int i=0; i<graph.node_count; i++) {
+  for(int64_t i=0; i<graph.node_count; i++) {
     if(sssp.frontier[i] == true) {
-      int64_t begin = graph.arcs[i];
-      int64_t end = graph.arcs[i+1];
+      int64_t begin = graph.arc_index[i];
+      int64_t end = graph.arc_index[i+1];
 
       for(int64_t j=begin; j<end; j++) {
         int64_t tail_node = graph.arc_tail[j];
@@ -61,12 +63,11 @@ void Relaxation(struct SSSP sssp, struct GRAPH graph) {
       }
     }
   }
-
 }
 
 void SettlementMin(struct SSSP* sssp, struct GRAPH graph) {
   sssp->delta_dist = FLT_MAX;
-  for(int i=0; i<graph.node_count; i++) {
+  for(int64_t i=0; i<graph.node_count; i++) {
     if(sssp->unsettled[i] == true) {
       float dist_i = sssp->distance[i] + sssp->delta_node[i];
       if(dist_i < sssp->delta_dist)
@@ -76,7 +77,7 @@ void SettlementMin(struct SSSP* sssp, struct GRAPH graph) {
 }
 
 void SettlementUpdate(struct SSSP sssp, struct GRAPH graph) {
-  for(int i=0; i<graph.node_count; i++) {
+  for(int64_t i=0; i<graph.node_count; i++) {
     sssp.frontier[i] = false;
     if(sssp.unsettled[i] == true && sssp.distance[i] <= sssp.delta_dist) {
       sssp.unsettled[i] = false;
@@ -87,9 +88,9 @@ void SettlementUpdate(struct SSSP sssp, struct GRAPH graph) {
 
 // compute the minimum arch weight for each node
 void PrecomputeNodeMinimum(struct SSSP sssp, struct GRAPH graph) {
-  for(int i=0; i<graph.node_count; i++) {
-    int64_t begin = graph.arcs[i];
-    int64_t end = graph.arcs[i+1];
+  for(int64_t i=0; i<graph.node_count; i++) {
+    int64_t begin = graph.arc_index[i];
+    int64_t end = graph.arc_index[i+1];
 
     float minimum_weight = FLT_MAX;
     for(int64_t j=begin; j<end; j++) {
@@ -113,8 +114,8 @@ void ReadInput(struct GRAPH *graph) {
   if (record_size != sizeof(int64_t)) {
     printf("record size = %d != %lu", record_size, sizeof(int64_t));
   }
-  graph->arcs = (int64_t *) malloc (sizeof(int64_t) * (graph->node_count + 1));
-  fread(graph->arcs, record_size, graph->node_count + 1, ifp);
+  graph->arc_index = (int64_t *) malloc (sizeof(int64_t) * (graph->node_count + 1));
+  fread(graph->arc_index, record_size, graph->node_count + 1, ifp);
   fread(&graph->arc_count, sizeof(int64_t), 1, ifp);
   fread(&record_size, sizeof(int), 1, ifp);
   if (record_size != sizeof(int64_t)) {
@@ -133,6 +134,15 @@ void ReadInput(struct GRAPH *graph) {
   fclose(ifp);
 }
 
+void printSettledCount(struct SSSP sssp, struct GRAPH graph) {
+  int64_t settled = 0;
+  for(int64_t i=0; i<graph.node_count; i++) {
+    if(sssp.unsettled[i] == false)
+      settled++;
+  }
+  printf("Settled count: %lu \n", settled);
+}
+
 int main(int argc, char **argv) {
   struct GRAPH graph;
   struct SSSP sssp;
@@ -141,10 +151,15 @@ int main(int argc, char **argv) {
   Initialize(&sssp, graph);
   PrecomputeNodeMinimum(sssp, graph);
 
+  int64_t loop_count = 0;
   while(sssp.delta_dist < FLT_MAX) {
+    printf("loop count: %lu\n", loop_count);
     Relaxation(sssp, graph);
     SettlementMin(&sssp, graph);
     SettlementUpdate(sssp, graph);
+
+    printSettledCount(sssp, graph);
+    loop_count++;
   }
 
   return 0;

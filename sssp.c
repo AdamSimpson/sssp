@@ -24,7 +24,7 @@ struct SSSP {
   bool *restrict frontier;
   float *restrict distance;
   float *restrict delta_node;
-
+  int64_t *restrict parents; 
   int64_t start_node;
   float delta_dist;
 };
@@ -34,6 +34,7 @@ void Initialize(struct SSSP *sssp, struct GRAPH graph) {
   sssp->frontier = malloc(graph.node_count * sizeof(int64_t));
   sssp->distance = malloc(graph.node_count * sizeof(float));
   sssp->delta_node = malloc(graph.node_count * sizeof(float));
+  sssp->parents = malloc(graph.node_count * sizeof(int64_t));
 
   sssp->delta_dist = 0.0f;
   sssp->start_node = 0;
@@ -42,11 +43,13 @@ void Initialize(struct SSSP *sssp, struct GRAPH graph) {
     sssp->distance[i] = FLT_MAX;
     sssp->frontier[i] = false;
     sssp->unsettled[i] = true;
+    sssp->parents[i] = -1;
   }
 
   sssp->distance[sssp->start_node] = 0.0f;
   sssp->frontier[sssp->start_node] = true;
   sssp->unsettled[sssp->start_node] = false;
+  sssp->parents[sssp->start_node] = sssp->start_node;
 }
 
 void Relaxation(struct SSSP sssp, struct GRAPH graph) {
@@ -58,7 +61,13 @@ void Relaxation(struct SSSP sssp, struct GRAPH graph) {
       for(int64_t j=begin; j<end; j++) {
         int64_t tail_node = graph.edge_tail[j];
         if(sssp.unsettled[tail_node] == true) {
-          sssp.distance[tail_node] = MIN(sssp.distance[tail_node], sssp.distance[i] + graph.weights[j]);
+          float tmp_dist = sssp.distance[i] + graph.weights[j];
+          if(tmp_dist < sssp.distance[tail_node]) {
+            sssp.distance[tail_node] = tmp_dist;
+            parents[tail_node] = i;
+ 
+          }
+            
         }
       }
     }

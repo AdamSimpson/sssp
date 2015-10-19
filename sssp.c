@@ -12,10 +12,10 @@ struct GRAPH {
   int64_t node_count;
 
   // Using forward star representation
-  // arc_index[i] is first index in arc_tail and weights for i'th node
-  // arc_index[i+1] is the last index + 1 in arc_tail and weights for i'th node
-  int64_t *restrict arc_index;
-  int64_t *restrict arc_tail;
+  // edge_index[i] is first index in edge_tail and weights for i'th node
+  // edge_index[i+1] is the last index + 1 in edge_tail and weights for i'th node
+  int64_t *restrict edge_index;
+  int64_t *restrict edge_tail;
   float  *restrict weights;
 };
 
@@ -52,11 +52,11 @@ void Initialize(struct SSSP *sssp, struct GRAPH graph) {
 void Relaxation(struct SSSP sssp, struct GRAPH graph) {
   for(int64_t i=0; i<graph.node_count; i++) {
     if(sssp.frontier[i] == true) {
-      int64_t begin = graph.arc_index[i];
-      int64_t end = graph.arc_index[i+1];
+      int64_t begin = graph.edge_index[i];
+      int64_t end = graph.edge_index[i+1];
 
       for(int64_t j=begin; j<end; j++) {
-        int64_t tail_node = graph.arc_tail[j];
+        int64_t tail_node = graph.edge_tail[j];
         if(sssp.unsettled[tail_node] == true) {
           sssp.distance[tail_node] = MIN(sssp.distance[tail_node], sssp.distance[i] + graph.weights[j]);
         }
@@ -65,7 +65,7 @@ void Relaxation(struct SSSP sssp, struct GRAPH graph) {
   }
 }
 
-void SettlementMin(struct SSSP* sssp, struct GRAPH graph) {
+void SettlementMin(struct SSSP *sssp, struct GRAPH graph) {
   sssp->delta_dist = FLT_MAX;
   for(int64_t i=0; i<graph.node_count; i++) {
     if(sssp->unsettled[i] == true) {
@@ -89,8 +89,8 @@ void SettlementUpdate(struct SSSP sssp, struct GRAPH graph) {
 // compute the minimum arch weight for each node
 void PrecomputeNodeMinimum(struct SSSP sssp, struct GRAPH graph) {
   for(int64_t i=0; i<graph.node_count; i++) {
-    int64_t begin = graph.arc_index[i];
-    int64_t end = graph.arc_index[i+1];
+    int64_t begin = graph.edge_index[i];
+    int64_t end = graph.edge_index[i+1];
 
     float minimum_weight = FLT_MAX;
     for(int64_t j=begin; j<end; j++) {
@@ -109,20 +109,22 @@ void ReadInput(struct GRAPH *graph) {
     printf("open file failed\n");
   }
   fread(&graph->node_count, sizeof(int64_t), 1, ifp);
+  printf("node count: %lu\n", graph->node_count);
   int record_size;
   fread(&record_size, sizeof(int), 1, ifp);
   if (record_size != sizeof(int64_t)) {
     printf("record size = %d != %lu", record_size, sizeof(int64_t));
   }
-  graph->arc_index = (int64_t *) malloc (sizeof(int64_t) * (graph->node_count + 1));
-  fread(graph->arc_index, record_size, graph->node_count + 1, ifp);
+  graph->edge_index = (int64_t *) malloc (sizeof(int64_t) * (graph->node_count + 1));
+  fread(graph->edge_index, record_size, graph->node_count + 1, ifp);
   fread(&graph->arc_count, sizeof(int64_t), 1, ifp);
+  printf("arc count: %lu\n", graph->arc_count);
   fread(&record_size, sizeof(int), 1, ifp);
   if (record_size != sizeof(int64_t)) {
     printf("record size = %d != %lu", record_size, sizeof(int64_t));
   }
-  graph->arc_tail = (int64_t *) malloc(sizeof(int64_t) * graph->arc_count);
-  fread(graph->arc_tail, record_size, graph->arc_count, ifp);
+  graph->edge_tail = (int64_t *) malloc(sizeof(int64_t) * graph->arc_count);
+  fread(graph->edge_tail, record_size, graph->arc_count, ifp);
 
   fread(&record_size, sizeof(int), 1, ifp);
   if (record_size != sizeof(float)) {

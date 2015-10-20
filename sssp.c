@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <float.h>
+#include "safe_alloc.h"
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 
@@ -30,11 +31,11 @@ struct SSSP {
 };
 
 void Initialize(struct SSSP *sssp, struct GRAPH graph) {
-  sssp->unsettled = malloc(graph.node_count * sizeof(int64_t));
-  sssp->frontier = malloc(graph.node_count * sizeof(int64_t));
-  sssp->distance = malloc(graph.node_count * sizeof(float));
-  sssp->delta_node = malloc(graph.node_count * sizeof(float));
-  sssp->parents = malloc(graph.node_count * sizeof(int64_t));
+  sssp->unsettled  = SAFE_ALLOC(graph.node_count, sizeof(int64_t));
+  sssp->frontier   = SAFE_ALLOC(graph.node_count, sizeof(int64_t));
+  sssp->distance   = SAFE_ALLOC(graph.node_count, sizeof(float));
+  sssp->delta_node = SAFE_ALLOC(graph.node_count, sizeof(float));
+  sssp->parents    = SAFE_ALLOC(graph.node_count, sizeof(int64_t));
 
   sssp->delta_dist = 0.0f;
   sssp->start_node = 0;
@@ -124,7 +125,7 @@ void ReadInput(struct GRAPH *graph) {
   if (record_size != sizeof(int64_t)) {
     printf("record size = %d != %lu", record_size, sizeof(int64_t));
   }
-  graph->edge_index = (int64_t *) malloc (sizeof(int64_t) * (graph->node_count + 1));
+  graph->edge_index = SAFE_ALLOC(sizeof(int64_t), (graph->node_count + 1));
   fread(graph->edge_index, record_size, graph->node_count + 1, ifp);
   fread(&graph->arc_count, sizeof(int64_t), 1, ifp);
   printf("arc count: %lu\n", graph->arc_count);
@@ -132,14 +133,14 @@ void ReadInput(struct GRAPH *graph) {
   if (record_size != sizeof(int64_t)) {
     printf("record size = %d != %lu", record_size, sizeof(int64_t));
   }
-  graph->edge_tail = (int64_t *) malloc(sizeof(int64_t) * graph->arc_count);
+  graph->edge_tail = SAFE_ALLOC(sizeof(int64_t), graph->arc_count);
   fread(graph->edge_tail, record_size, graph->arc_count, ifp);
 
   fread(&record_size, sizeof(int), 1, ifp);
   if (record_size != sizeof(float)) {
     printf("record size = %d != %lu", record_size, sizeof(float));
   }
-  graph->weights = (float *) malloc (sizeof(float) * graph->arc_count);
+  graph->weights = SAFE_ALLOC(sizeof(float), graph->arc_count);
   fread(graph->weights, sizeof(float), graph->arc_count, ifp);
 
   fclose(ifp);

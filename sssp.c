@@ -144,13 +144,17 @@ void ReadInput(struct GRAPH *graph) {
   fclose(ifp);
 }
 
-void printSettledCount(struct SSSP sssp, struct GRAPH graph) {
+void PrintSettledCount(struct SSSP sssp, struct GRAPH graph) {
   int64_t settled = 0;
   for(int64_t i=0; i<graph.node_count; i++) {
     if(sssp.unsettled[i] == false)
       settled++;
   }
   printf("Settled count: %lu \n", settled);
+}
+
+bool ChckResults(struct SSSP sssp){
+  printf("node %d distance: %f parent %lu\n", 1000, sssp.distance[1000], sssp.parents[1000]);
 }
 
 int main(int argc, char **argv) {
@@ -163,16 +167,16 @@ int main(int argc, char **argv) {
 
   int64_t loop_count = 0;
   while(sssp.delta_dist < FLT_MAX) {
-//    printf("loop count: %lu\n", loop_count);
+//    Printf("loop count: %lu\n", loop_count);
     Relaxation(sssp, graph);
     SettlementMin(&sssp, graph);
     SettlementUpdate(sssp, graph);
 
-//    printSettledCount(sssp, graph);
+//    PrintSettledCount(sssp, graph);
     loop_count++;
   }
 
-  printf("node %d distance: %f parent %lu\n", 1000, sssp.distance[1000], sssp.parents[1000]);
+  CheckResults(sssp);
 
   return 0;
 }

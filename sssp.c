@@ -152,9 +152,8 @@ void PrintSettledCount(struct SSSP sssp, struct GRAPH graph) {
   }
   printf("Settled count: %lu \n", settled);
 }
-
-bool ChckResults(struct SSSP sssp){
-  printf("node %d distance: %f parent %lu\n", 1000, sssp.distance[1000], sssp.parents[1000]);
+void CheckResults(struct SSSP sssp){
+  printf("node %d distance: %f parent %lu\n", 10000, sssp.distance[10000], sssp.parents[10000]);
 }
 
 int main(int argc, char **argv) {

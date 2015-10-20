@@ -64,7 +64,7 @@ void Relaxation(struct SSSP sssp, struct GRAPH graph) {
           float tmp_dist = sssp.distance[i] + graph.weights[j];
           if(tmp_dist < sssp.distance[tail_node]) {
             sssp.distance[tail_node] = tmp_dist;
-            parents[tail_node] = i;
+            sssp.parents[tail_node] = i;
  
           }
             
@@ -164,14 +164,16 @@ int main(int argc, char **argv) {
 
   int64_t loop_count = 0;
   while(sssp.delta_dist < FLT_MAX) {
-    printf("loop count: %lu\n", loop_count);
+//    printf("loop count: %lu\n", loop_count);
     Relaxation(sssp, graph);
     SettlementMin(&sssp, graph);
     SettlementUpdate(sssp, graph);
 
-    printSettledCount(sssp, graph);
+//    printSettledCount(sssp, graph);
     loop_count++;
   }
+
+  printf("node %d distance: %f parent %lu\n", 1000, sssp.distance[1000], sssp.parents[1000]);
 
   return 0;
 }

@@ -17,17 +17,17 @@ struct GRAPH {
   // edge_index[i+1] is the last index + 1 in edge_tail and weights for i'th node
   int64_t *restrict edge_index;
   int64_t *restrict edge_tail;
-  float  *restrict weights;
+  float   *restrict weights;
 };
 
 struct SSSP {
-  bool *restrict unsettled;
-  bool *restrict frontier;
-  float *restrict distance;
-  float *restrict delta_node;
+  bool    *restrict unsettled;
+  bool    *restrict frontier;
+  float   *restrict distance;
+  float   *restrict delta_node;
   int64_t *restrict parents; 
   int64_t start_node;
-  float delta_dist;
+  float   delta_dist;
 };
 
 void Initialize(struct SSSP *sssp, struct GRAPH graph) {
@@ -41,16 +41,16 @@ void Initialize(struct SSSP *sssp, struct GRAPH graph) {
   sssp->start_node = 0;
 
   for(int64_t i=0; i<graph.node_count; i++) {
-    sssp->distance[i] = FLT_MAX;
-    sssp->frontier[i] = false;
+    sssp->distance[i]  = FLT_MAX;
+    sssp->frontier[i]  = false;
     sssp->unsettled[i] = true;
-    sssp->parents[i] = -1;
+    sssp->parents[i]   = -1;
   }
 
-  sssp->distance[sssp->start_node] = 0.0f;
-  sssp->frontier[sssp->start_node] = true;
+  sssp->distance[sssp->start_node]  = 0.0f;
+  sssp->frontier[sssp->start_node]  = true;
   sssp->unsettled[sssp->start_node] = false;
-  sssp->parents[sssp->start_node] = sssp->start_node;
+  sssp->parents[sssp->start_node]   = sssp->start_node;
 }
 
 void Relaxation(struct SSSP sssp, struct GRAPH graph) {
@@ -66,9 +66,7 @@ void Relaxation(struct SSSP sssp, struct GRAPH graph) {
           if(tmp_dist < sssp.distance[tail_node]) {
             sssp.distance[tail_node] = tmp_dist;
             sssp.parents[tail_node] = i;
- 
           }
-            
         }
       }
     }

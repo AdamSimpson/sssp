@@ -4,6 +4,7 @@
 #include <math.h>
 #include <float.h>
 #include "cuda_runtime.h"
+#include <time.h>
 
 #define NONE -1
 #define CLOSED -2
@@ -30,10 +31,10 @@ void shortest_path_initialize(int32_t numOfNodes,
                               int32_t **d_heap,
                               int32_t **d_qpos) {
   printf("begin: shortest_path_initialize\n");
-  *minValues = (float *)calloc(N*numOfNodes, sizeof(float));
-  *parents = (int32_t *)calloc(N*numOfNodes, sizeof(int32_t));
-  *heap = (int32_t *)calloc(N*numOfNodes, sizeof(int32_t));
-  *qpos = (int32_t *)calloc(N*numOfNodes, sizeof(int32_t));
+  cudaMallocHost(minValues, N*numOfNodes * sizeof(float));
+  cudaMallocHost(parents, N*numOfNodes *sizeof(int32_t));
+  cudaMallocHost(heap, N*numOfNodes * sizeof(int32_t));
+  cudaMallocHost(qpos, N*numOfNodes *sizeof(int32_t));
 
    for (int i=0; i < N * numOfNodes; ++i) {
      (*minValues)[i] = FLT_MAX;
@@ -196,7 +197,7 @@ void read_forward_star_from_bin_file(int32_t *numOfNodes,
                                     ) {
   printf("begin:read forward star data...\n");
   FILE *ifp;
-  if ((ifp = fopen("/home/atj/Documents/GISData/GDT/GDT_100KFS.bin", "r")) == NULL) {
+  if ((ifp = fopen("GDT_100KFS.bin", "r")) == NULL) {
     printf("open file failed\n");
   }
   size_t bytes;
@@ -209,7 +210,7 @@ void read_forward_star_from_bin_file(int32_t *numOfNodes,
 
   int64_t *tmp_buff = (int64_t*)malloc((*numOfNodes+1)*sizeof(int64_t));
 
-  *aNodes = (int32_t *) malloc (sizeof(int32_t) * (*numOfNodes + 1));
+  cudaMallocHost(aNodes, sizeof(int32_t) * (*numOfNodes + 1));
   bytes = fread(tmp_buff, theRecordSize, (*numOfNodes) + 1, ifp);
   for(int i=0; i<(*numOfNodes+1); i++)
     (*aNodes)[i] = (int32_t)tmp_buff[i];
@@ -222,13 +223,13 @@ void read_forward_star_from_bin_file(int32_t *numOfNodes,
   tmp_buff = (int64_t*)malloc(*numOfLinks*sizeof(int64_t));
 
   bytes = fread(&theRecordSize, sizeof(int), 1, ifp);
-  *bNodes = (int32_t *) malloc(sizeof(int32_t) * (*numOfLinks));
+  cudaMallocHost(bNodes, sizeof(int32_t) * (*numOfLinks));
   bytes = fread(tmp_buff, theRecordSize, *numOfLinks, ifp);
   for(int i=0; i<*numOfLinks; i++)
     (*bNodes)[i] = (int32_t)tmp_buff[i];
 
   bytes = fread(&theRecordSize, sizeof(int), 1, ifp);
-  *impedances = (float *) malloc (sizeof(float) * (*numOfLinks));
+  cudaMallocHost(impedances, sizeof(float) * (*numOfLinks));
   bytes = fread(*impedances, sizeof(float), *numOfLinks, ifp);
 
   free(tmp_buff);
@@ -275,6 +276,8 @@ int main(int argc, char **argv) {
                                   &d_bNodes,
                                   &d_impedances);
 
+  clock_t start = clock(), diff;
+
    shortest_path_initialize(numOfNodes,
                            &minValues,
                            &parents,
@@ -285,6 +288,10 @@ int main(int argc, char **argv) {
                            &d_heap,
                            &d_qpos);
 
+  diff = clock() - start;
+  int msec = diff * 1000 / CLOCKS_PER_SEC;
+  printf("Time taken %d seconds %d milliseconds\n", msec/1000, msec%1000);
+  start = clock();
 
   shortest_path_gpu(numOfNodes,
                     d_parents,
@@ -295,6 +302,10 @@ int main(int argc, char **argv) {
                     d_aNodes,
                     d_bNodes,
                     d_impedances);
+
+  diff = clock() - start;
+  msec = diff * 1000 / CLOCKS_PER_SEC;
+  printf("Time taken %d seconds %d milliseconds\n", msec/1000, msec%1000);
 
   cudaMemcpy(minValues, d_minValues, N*numOfNodes*sizeof(float), cudaMemcpyDeviceToHost);
 

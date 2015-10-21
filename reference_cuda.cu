@@ -39,6 +39,7 @@ void shortest_path_initialize(int32_t numOfNodes,
    for (int i=0; i < N * numOfNodes; ++i) {
      (*minValues)[i] = FLT_MAX;
     (*parents)[i] = NONE;
+    (*heap)[i] = 0;
     (*qpos)[i] = NONE;
   }
 
@@ -175,7 +176,7 @@ void shortest_path_gpu(int32_t numOfNodes,
                           int32_t *d_bNodes,
                           float *d_impedances) {
 
-  int block_size = 512;
+  int block_size = 32;
   int grid_size = (int)ceil((float)N/block_size);
 
   shortest_path_kernel<<<grid_size, block_size>>>(numOfNodes,
@@ -297,7 +298,8 @@ int main(int argc, char **argv) {
 
   diff = clock() - start;
   int msec = diff * 1000 / CLOCKS_PER_SEC;
-  printf("Time taken %d seconds %d milliseconds\n", msec/1000, msec%1000);
+  printf("Time taken to initialize %d seconds %d milliseconds\n", msec/1000, msec%1000);
+
   start = clock();
 
   shortest_path_gpu(numOfNodes,
@@ -312,11 +314,13 @@ int main(int argc, char **argv) {
 
   diff = clock() - start;
   msec = diff * 1000 / CLOCKS_PER_SEC;
-  printf("Time taken %d seconds %d milliseconds\n", msec/1000, msec%1000);
+  printf("Time taken to compute and copy %d seconds %d milliseconds\n", msec/1000, msec%1000);
 
   cudaMemcpy(minValues, d_minValues, N*numOfNodes*sizeof(float), cudaMemcpyDeviceToHost);
 
   printf("mineValues[10] = %f parents[10]: %d\n", minValues[10], parents[10]);
+  printf("mineValues[10] = %f parents[10]: %d\n", minValues[numOfNodes+10], parents[numOfNodes+10]);
+
 
   return 0;
 }

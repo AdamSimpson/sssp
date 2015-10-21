@@ -75,80 +75,87 @@ __device__ void shortest_path_execute(int aCarID,
   float nextValue;
   int32_t nhp = 0;
 
-  d_minValues[aCarID*numOfNodes + aStartNode] = 0.0;
-  d_parents[aCarID*numOfNodes + aStartNode] = NONE;
-  d_heap[aCarID*numOfNodes + (nhp++)] = aStartNode;
+  d_minValues[aStartNode] = 0.0;
+  d_parents[aStartNode] = NONE;
+  d_heap[nhp++] = aStartNode;
   current = NONE;
   while (nhp > 0) {
-    current = d_heap[aCarID*numOfNodes + 0];
-    d_qpos[aCarID*numOfNodes + current] = CLOSED;
+    current = d_heap[0];
+    d_qpos[current] = CLOSED;
     if (nhp > 1) {
-      hp1 = d_heap[aCarID*numOfNodes + (--nhp)];
-      nextValue = d_minValues[aCarID*numOfNodes + hp1];
+      hp1 = d_heap[--nhp];
+      nextValue = d_minValues[hp1];
       k = 0;
       k2 = k * 2 + 1;
       while (k2 < nhp) {
-        hp2 = d_heap[aCarID*numOfNodes + k2];
+        hp2 = d_heap[k2];
         if (k2 < nhp - 1) {
-          hp3 = d_heap[aCarID*numOfNodes + k2 + 1];
-          if (d_minValues[aCarID*numOfNodes + hp3] < d_minValues[aCarID*numOfNodes + hp2]) {
+          hp3 = d_heap[k2 + 1];
+          if (d_minValues[hp3] < d_minValues[hp2]) {
             hp2 = hp3;
             k2++;
           }
         }
-        if (nextValue > d_minValues[aCarID*numOfNodes + hp2]) {
-          d_heap[aCarID*numOfNodes + k] = hp2;
-          d_qpos[aCarID*numOfNodes + hp2] = k;
+        if (nextValue > d_minValues[hp2]) {
+          d_heap[k] = hp2;
+          d_qpos[hp2] = k;
           k = k2;
           k2 = k * 2 + 1;
         } else
           break;
       }
-      d_heap[aCarID*numOfNodes + k] = hp1;
-      d_qpos[aCarID*numOfNodes + hp1] = k;
+      d_heap[k] = hp1;
+      d_qpos[hp1] = k;
     } else
       nhp--;
 
     for (j = d_aNodes[current]; j < d_aNodes[current + 1]; ++j) {
       next = d_bNodes[j];
-      if (d_qpos[aCarID*numOfNodes + next] == CLOSED)
+      if (d_qpos[next] == CLOSED)
         continue;
-      nextValue = d_minValues[aCarID*numOfNodes + current] + d_impedances[j];
-      if (nextValue < d_minValues[aCarID*numOfNodes + next]) {
-        d_minValues[aCarID*numOfNodes + next] = nextValue;
-        d_parents[aCarID*numOfNodes + next] = current;
-        if (d_qpos[aCarID*numOfNodes + next] == NONE)
-          d_qpos[aCarID*numOfNodes + next] = nhp++;
-        k = d_qpos[aCarID*numOfNodes + next];
+      nextValue = d_minValues[current] + d_impedances[j];
+      if (nextValue < d_minValues[next]) {
+        d_minValues[next] = nextValue;
+        d_parents[next] = current;
+        if (d_qpos[next] == NONE)
+          d_qpos[next] = nhp++;
+        k = d_qpos[next];
         while (k > 0) {
           k2 = (k - 1) / 2;
-          hp2 = d_heap[aCarID*numOfNodes +k2];
-          if (nextValue < d_minValues[aCarID*numOfNodes +hp2]) {
-            d_heap[aCarID*numOfNodes +k] = hp2;
-            d_qpos[aCarID*numOfNodes +hp2] = k;
+          hp2 = d_heap[k2];
+          if (nextValue < d_minValues[hp2]) {
+            d_heap[k] = hp2;
+            d_qpos[hp2] = k;
             k = k2;
           } else
             break;
         }
-        d_heap[aCarID*numOfNodes + k] = next;
-        d_qpos[aCarID*numOfNodes + next] = k;
+        d_heap[k] = next;
+        d_qpos[next] = k;
       }
     }
   }
 }
 
 __global__ void shortest_path_kernel(int32_t numOfNodes,
-                                     int32_t *d_parents,
-                                     int32_t *d_heap,
-                                     int32_t *d_qpos,
-                                     float *d_minValues,
+                                     int32_t *gd_parents,
+                                     int32_t *gd_heap,
+                                     int32_t *gd_qpos,
+                                     float *gd_minValues,
                                      int32_t *d_aNodes,
                                      int32_t *d_bNodes,
                                      float *d_impedances) {
   int tid = blockIdx.x *blockDim.x + threadIdx.x;
 
   if(tid < N) {
-    shortest_path_execute(tid, tid, numOfNodes, d_parents,
+    int aCarID = tid;
+    int aStartNode = tid;
+    int32_t *d_parents = gd_parents + aCarID*numOfNodes;
+    int32_t *d_heap = gd_heap + aCarID*numOfNodes;
+    int32_t *d_qpos = gd_qpos + aCarID*numOfNodes;
+    float *d_minValues = gd_minValues + aCarID*numOfNodes;
+
+    shortest_path_execute(aCarID, aStartNode, numOfNodes, d_parents,
                                                     d_heap,
                                                     d_qpos,
                                                     d_minValues,

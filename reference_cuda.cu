@@ -9,8 +9,6 @@
 #define NONE -1
 #define CLOSED -2
 
-#define N 3000
-
 #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
 inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
 {
@@ -21,38 +19,51 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
    }
 }
 
-void shortest_path_initialize(int32_t numOfNodes,
-                              float **minValues,
+void shortest_path_initialize(int32_t N,
+                              int32_t N_block,
+                              int32_t numOfNodes,
                               int32_t** parents,
-                              int32_t** heap,
-                              int32_t** qpos,
                               float **d_minValues,
                               int32_t **d_parents,
                               int32_t **d_heap,
                               int32_t **d_qpos) {
   printf("begin: shortest_path_initialize\n");
-  cudaMallocHost(minValues, N*numOfNodes * sizeof(float));
   cudaMallocHost(parents, N*numOfNodes *sizeof(int32_t));
-  cudaMallocHost(heap, N*numOfNodes * sizeof(int32_t));
-  cudaMallocHost(qpos, N*numOfNodes *sizeof(int32_t));
 
-   for (int i=0; i < N * numOfNodes; ++i) {
-     (*minValues)[i] = FLT_MAX;
-    (*parents)[i] = NONE;
-    (*heap)[i] = 0;
-    (*qpos)[i] = NONE;
-  }
+  printf("bytes allocated: %lu \n", 4*N_block*numOfNodes*4);
 
-  cudaMalloc(d_minValues, N*numOfNodes*sizeof(float));
-  cudaMemcpy(*d_minValues, *minValues, N*numOfNodes*sizeof(float), cudaMemcpyHostToDevice );
-  cudaMalloc(d_parents, N*numOfNodes*sizeof(int32_t));
-  cudaMemcpy(*d_parents, *parents, N*numOfNodes*sizeof(int32_t), cudaMemcpyHostToDevice );
-  cudaMalloc(d_heap, N*numOfNodes*sizeof(int32_t));
-  cudaMemcpy(*d_heap, *heap, N*numOfNodes*sizeof(int32_t), cudaMemcpyHostToDevice );
-  cudaMalloc(d_qpos, N*numOfNodes*sizeof(int32_t));
-  cudaMemcpy(*d_qpos, *qpos, N*numOfNodes*sizeof(int32_t), cudaMemcpyHostToDevice );
+  cudaMalloc(d_minValues, N_block*numOfNodes*sizeof(float));
+  cudaMalloc(d_parents, N_block*numOfNodes*sizeof(int32_t));
+  cudaMalloc(d_heap, N_block*numOfNodes*sizeof(int32_t));
+  cudaMalloc(d_qpos, N_block*numOfNodes*sizeof(int32_t));
 
   printf("end: shortest_path_initialize\n");
+}
+
+__global__ void init_data_kernel(int32_t length, float *d_minValues,
+                              int32_t *d_parents, int32_t *d_heap, int32_t *d_qpos) {
+
+  int tid = threadIdx.x + (blockDim.x * ((gridDim.x * blockIdx.y) + blockIdx.x));
+
+  if(tid < length) {
+    d_minValues[tid] = FLT_MAX; 
+    d_parents[tid] = NONE;
+    d_heap[tid] = 0;
+    d_qpos[tid] = NONE;
+  }
+
+}
+
+void init_data_gpu(int32_t length, float *d_minValues,
+                   int32_t *d_parents, int32_t *d_heap, int32_t *d_qpos) {
+  int block_size = 1024;
+  int size_y = 10;
+  dim3 grid_size((int)ceil((float)length/block_size/size_y), size_y, 1);
+
+//  printf("length: %d, block_size: %d, grid_size %d\n", length, block_size, grid_size);
+
+  init_data_kernel<<<grid_size, block_size>>>(length, d_minValues, d_parents, d_heap, d_qpos);
+
 }
 
 __device__ void shortest_path_execute(int aCarID,
@@ -138,7 +149,9 @@ __device__ void shortest_path_execute(int aCarID,
   }
 }
 
-__global__ void shortest_path_kernel(int32_t numOfNodes,
+__global__ void shortest_path_kernel(int32_t N_block,
+                                     int32_t numOfNodes,
+                                     int32_t start_offset,
                                      int32_t *gd_parents,
                                      int32_t *gd_heap,
                                      int32_t *gd_qpos,
@@ -148,9 +161,9 @@ __global__ void shortest_path_kernel(int32_t numOfNodes,
                                      float *d_impedances) {
   int tid = blockIdx.x *blockDim.x + threadIdx.x;
 
-  if(tid < N) {
+  if(tid < N_block) {
     int aCarID = tid;
-    int aStartNode = tid;
+    int aStartNode = tid + start_offset;
     int32_t *d_parents = gd_parents + aCarID*numOfNodes;
     int32_t *d_heap = gd_heap + aCarID*numOfNodes;
     int32_t *d_qpos = gd_qpos + aCarID*numOfNodes;
@@ -166,7 +179,9 @@ __global__ void shortest_path_kernel(int32_t numOfNodes,
   }
 }
 
-void shortest_path_gpu(int32_t numOfNodes,
+void shortest_path_gpu(int32_t N_block,
+                          int32_t numOfNodes,
+                          int32_t start_offset,
                           int32_t *d_parents,
                           int32_t *parents,
                           int32_t *d_heap,
@@ -176,10 +191,10 @@ void shortest_path_gpu(int32_t numOfNodes,
                           int32_t *d_bNodes,
                           float *d_impedances) {
 
-  int block_size = 32;
-  int grid_size = (int)ceil((float)N/block_size);
+  int block_size = 8;
+  int grid_size = (int)ceil((float)N_block/block_size);
 
-  shortest_path_kernel<<<grid_size, block_size>>>(numOfNodes,
+  shortest_path_kernel<<<grid_size, block_size>>>(N_block,numOfNodes,start_offset,
                                                   d_parents,
                                                   d_heap,
                                                   d_qpos,
@@ -188,10 +203,7 @@ void shortest_path_gpu(int32_t numOfNodes,
                                                   d_bNodes,
                                                   d_impedances);
 
-//  gpuErrchk( cudaPeekAtLastError() );
-  cudaMemcpy(parents, d_parents, N*numOfNodes*sizeof(int32_t), cudaMemcpyDeviceToHost);
-
-//  gpuErrchk( cudaPeekAtLastError() );
+    cudaMemcpy(parents, d_parents, N_block*numOfNodes*sizeof(int32_t), cudaMemcpyDeviceToHost);
 }
 
 void read_forward_star_from_bin_file(int32_t *numOfNodes,
@@ -243,6 +255,17 @@ void read_forward_star_from_bin_file(int32_t *numOfNodes,
   free(tmp_buff);
   fclose(ifp);
 
+  printf("end:read forward star data...\n");
+}
+
+void copy_to_device(int32_t *numOfNodes,
+                                     int32_t *numOfLinks,
+                                     int32_t **aNodes,
+                                     int32_t **bNodes,
+                                     float **impedances,
+                                     int32_t **d_aNodes,
+                                     int32_t **d_bNodes,
+                                     float **d_impedances) {
   cudaMalloc(d_aNodes, (*numOfNodes+1)*sizeof(int32_t));
   cudaMemcpy(*d_aNodes, *aNodes, (*numOfNodes+1)*sizeof(int32_t), cudaMemcpyHostToDevice );
   cudaMalloc(d_bNodes, *numOfLinks*sizeof(int32_t));
@@ -250,7 +273,6 @@ void read_forward_star_from_bin_file(int32_t *numOfNodes,
   cudaMalloc(d_impedances, *numOfLinks*sizeof(int32_t));
   cudaMemcpy(*d_impedances, *impedances, *numOfLinks*sizeof(float), cudaMemcpyHostToDevice );
 
-  printf("end:read forward star data...\n");
 }
 
 int main(int argc, char **argv) {
@@ -261,19 +283,15 @@ int main(int argc, char **argv) {
   int32_t *bNodes = NULL;
   float *impedances = NULL;
 
-  int32_t *parents = NULL;
-  int32_t *heap = NULL;
-  int32_t *qpos = NULL;
-  float *minValues = NULL;
+  int32_t *d_aNodes = NULL;
+  int32_t *d_bNodes = NULL;
+  float *d_impedances = NULL;
 
+  int32_t *parents = NULL;
   int32_t *d_parents = NULL;
   int32_t *d_heap = NULL;
   int32_t *d_qpos = NULL;
   float *d_minValues = NULL;
-
-  int32_t *d_aNodes = NULL;
-  int32_t *d_bNodes = NULL;
-  float *d_impedances = NULL;
 
   read_forward_star_from_bin_file(&numOfNodes,
                                   &numOfLinks,
@@ -284,43 +302,64 @@ int main(int argc, char **argv) {
                                   &d_bNodes,
                                   &d_impedances);
 
-  clock_t start = clock(), diff;
+  if(argc < 2) {
+    printf("Enter number of cars and block size");
+    return 1;
+  }
 
-   shortest_path_initialize(numOfNodes,
-                           &minValues,
+  int N = atoi(argv[1]);
+  int N_block = atoi(argv[2]);
+
+   printf("num cars: %d, block size: %d\n",N, N_block);
+
+   clock_t start = clock(), diff;
+
+   shortest_path_initialize(N,
+                             N_block,
+                           numOfNodes,
                            &parents,
-                           &heap,
-                           &qpos,
                            &d_minValues,
                            &d_parents,
                            &d_heap,
                            &d_qpos);
 
+
+  copy_to_device(&numOfNodes,
+                                  &numOfLinks,
+                                  &aNodes,
+                                  &bNodes,
+                                  &impedances,
+                                  &d_aNodes,
+                                  &d_bNodes,
+                                  &d_impedances);
+
+  for(int block=0; block< ceil(N/(float)N_block); block++) {
+    int32_t num_block = min(N_block, N - block*N_block);
+    int32_t start_offset = N_block*block;
+
+    init_data_gpu(num_block*numOfNodes, d_minValues, d_parents, d_heap, d_qpos);
+//    gpuErrchk( cudaPeekAtLastError() );
+
+    shortest_path_gpu(num_block,
+                     numOfNodes,
+                     start_offset,
+                      d_parents,
+                      parents + N_block*block*numOfNodes,
+                      d_heap,
+                      d_qpos,
+                      d_minValues,
+                      d_aNodes,
+                      d_bNodes,
+                      d_impedances);
+
+//  printf("parents[4000]: %d\n", parents[4000]);
+  }
+
   diff = clock() - start;
   int msec = diff * 1000 / CLOCKS_PER_SEC;
-  printf("Time taken to initialize %d seconds %d milliseconds\n", msec/1000, msec%1000);
-
-  start = clock();
-
-  shortest_path_gpu(numOfNodes,
-                    d_parents,
-                    parents,
-                    d_heap,
-                    d_qpos,
-                    d_minValues,
-                    d_aNodes,
-                    d_bNodes,
-                    d_impedances);
-
-  diff = clock() - start;
-  msec = diff * 1000 / CLOCKS_PER_SEC;
   printf("Time taken to compute and copy %d seconds %d milliseconds\n", msec/1000, msec%1000);
-
-  cudaMemcpy(minValues, d_minValues, N*numOfNodes*sizeof(float), cudaMemcpyDeviceToHost);
-
-  printf("mineValues[10] = %f parents[10]: %d\n", minValues[10], parents[10]);
-  printf("mineValues[10] = %f parents[10]: %d\n", minValues[numOfNodes+10], parents[numOfNodes+10]);
-
+  
+  printf("parents[4000]: %d\n", parents[4000]);
 
   return 0;
 }
